@@ -1,7 +1,7 @@
 {
 	"name": "node-leash",
 	"description": "A lightweight streaming parser and serializer for binary data in node.",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"author": "Eli Skeggs <skeggse@gmail.com>",
 	"dependencies": {
 		"buffer-crc32": "0.2.x"
@@ -13,6 +13,7 @@
 	],
 	"repository": "git://github.com/skeggse/node-leash",
 	"main": "protocol",
+	"license": "LGPL 2.1",
 	"engines": {
 		"node": ">= 0.6.x"
 	}
