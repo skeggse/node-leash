@@ -114,6 +114,11 @@ server.listen(3000);
 
 `node-leash` was created as a helper library for the upcoming `node-bulldog`, a robust khashmir-based DHT implementation for node.
 
+### TODO
+
+- Get a license!
+- Add unittests!
+
 ## License
 
 None yet... :(
