@@ -89,6 +89,37 @@ Protocol.prototype._serialize = function() {
   return this.serialize.apply(this, arguments);
 };
 
+// for java compatibility
+// in-place swapping, voids data integrity
+// returns bytes "consumed"
+Protocol.prototype.decodeString = function(buf, offset) {
+  var length = buf.readInt16BE(buf, offset);
+  offset += 2;
+  var end = offset + length;
+  for (var i = offset; i < end; i++) {
+    var swp = buf[i + 1];
+    buf[i + 1] = buf[i];
+    buf[i] = swp;
+  }
+  buf.toString('ucs2', offset, end);
+  return length + 2;
+};
+
+// for java compatibility
+// length is precomputed and accurate
+// returns bytes written
+Protocol.prototype.encodeString = function(buf, str, offset, length) {
+  buf.writeInt16BE(length, offset);
+  var end = offset + length;
+  buf.write(str, offset += 2, end, 'ucs2');
+  for (var i = offset; i < end; i += 2) {
+    var swp = buf[i + 1];
+    buf[i + 1] = buf[i];
+    buf[i] = swp;
+  }
+  return length + 2;
+};
+
 Protocol.prototype.compileParser = function() {
   // typechecking!
   if (this.events.length > 256)
