@@ -1,0 +1,7 @@
+{
+	"name": "node-leash",
+	"version": "0.0.1",
+	"dependencies": {
+		"buffer-crc32": "0.2.x"
+	}
+}
