@@ -1,4 +1,3 @@
-var _ = require('underscore');
 var crc = require('buffer-crc32');
 var Stream = require('stream');
 var inherits = require('util').inherits;
@@ -58,7 +57,9 @@ Protocol.prototype.event = function(name, parameters) {
     throw new Error("name contains invalid characters");
   if (reserved[name])
     throw new Error("that name is reserved");
-  var keys = _.keys(parameters);
+  var keys = [];
+  for (var key in parameters)
+    keys.push(key);
   keys.sort();
   var evt = [name], extra = [];
   for (var i = 0; i < keys.length; i++) {
