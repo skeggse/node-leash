@@ -109,3 +109,11 @@ var server = net.createServer(function(conn) {
 // bind the server to port 3000
 server.listen(3000);
 ```
+
+## About
+
+`node-leash` was created as a helper library for the upcoming `node-bulldog`, a robust khashmir-based DHT implementation for node.
+
+## License
+
+None yet... :(
