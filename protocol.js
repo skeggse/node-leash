@@ -74,6 +74,11 @@ Protocol.prototype.event = function(name, parameters) {
   this.events.push(evt.concat(extra));
 };
 
+Protocol.prototype.compile = function() {
+  this.compileParser();
+  this.compileSerializer();
+};
+
 Protocol.prototype._parse = function() {
   this.compileParser();
   return this.parse.apply(this, arguments);
