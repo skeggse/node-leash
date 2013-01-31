@@ -54,12 +54,10 @@ Protocol.prototype.event = function(name, parameters) {
   if (this.events.length >= 256)
     throw new Error("too many events");
   if (!nameRegex.test(name))
-    throw new Error("name contains invalid characters");
+    throw new Error("event name contains invalid characters");
   if (reserved[name])
-    throw new Error("that name is reserved");
-  var keys = [];
-  for (var key in parameters)
-    keys.push(key);
+    throw new Error("event name is reserved");
+  var keys = Object.keys(parameters);
   keys.sort();
   var evt = [name], extra = [];
   for (var i = 0; i < keys.length; i++) {
