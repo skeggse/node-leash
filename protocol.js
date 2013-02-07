@@ -44,6 +44,16 @@ var reserved = {
   newListener: true
 };
 
+// creates an identical protocol, using the compiled functions if applicable
+Protocol.prototype.clone = function() {
+  var protocol = new Protocol();
+  protocol.events = this.events.slice();
+  protocol._version = this._version;
+  protocol.parse = this.parse;
+  protocol.serialize = this.serialize;
+  return protocol;
+};
+
 // adds an event
 // parameters is an object with a name-type mapping (string->number)
 // the parameters are reordered according to the ascii value, deprioritizing buffers and strings
