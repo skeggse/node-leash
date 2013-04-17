@@ -24,7 +24,7 @@ protocol.send('initialize', {id: 0x50, x: 14.5, y: 17.8, z: 9000, items: 418, ch
 
     $ npm install node-leash
 
-Alternatively, you can "build" from source, although you won't be doing much building:
+Alternatively, you can acquire from source:
 
     $ git clone git://github.com/skeggse/node-leash.git
 
@@ -36,20 +36,16 @@ Alternatively, you can "build" from source, although you won't be doing much bui
 
 ### Streaming
 
-`node-leash` is an extension of [Stream](http://nodejs.org/api/stream.html), and as such can be used with other streams via `pipe`.  Most importantly, `node-leash` can be used with the `net` module, providing automatic serialization and parsing of events across a network connection.
+`node-leash` is an extension of [Stream](http://nodejs.org/api/stream.html) for Node.js v0.10, and as such can be used with other streams via `pipe`.  Most importantly, `node-leash` can be used with the `net` module, providing automatic serialization and parsing of events across a network connection.
 
-Check out examples/tcp-*.js for a complete example.
-
-## About
-
-`node-leash` was created as a helper library for the upcoming `node-bulldog`, a robust khashmir-based DHT implementation for node.
+Check out examples for a complete example.
 
 ### TODO
 
 - Add unittests!
-- Enhance ReadableStream implementation!
 - Add some form of JSON serialization, to handle transfer of objects?
 - Add RPC!
+- Improve id allocation to enhance protocol backwards compatibility
 
 ## License
 
