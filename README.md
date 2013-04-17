@@ -3,7 +3,7 @@ node-leash
 
 A lightweight streaming parser and serializer for binary data in [node](http://nodejs.org).
 
-```
+```js
 var Leash = require('node-leash');
 
 var leash = new Leash();
@@ -63,7 +63,7 @@ Check out examples for a complete example.
 - Add unittests!
 - Add some form of JSON serialization, to handle transfer of objects?
 - Add RPC!
-- Improve id allocation to enhance protocol backwards compatibility
+- Improve index allocation to enhance protocol backwards compatibility
 - Figure out support for [engine.io](https://github.com/LearnBoost/engine.io)
   - engine.io does not support binary data, only utf-8 strings.
 
