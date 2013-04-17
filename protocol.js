@@ -1,35 +1,54 @@
 var crc = require('buffer-crc32');
-var Stream = require('stream');
+var Duplex = require('readable-stream').Duplex;
 var inherits = require('util').inherits;
 
-var emit = Stream.prototype.emit;
+var compiler = require('./compiler');
 
-// a complex interface for generating socket handlers with big-endian binary data
-// currently works with up to 256 events
-// uses object-buffer conversion
+var emit = Duplex.prototype.emit;
 
+var TYPES = {};
+TYPES.BYTE    = 0;
+TYPES.SHORT   = 1;
+TYPES.INT     = 2;
+TYPES.INTEGER = 2;
+TYPES.FLOAT   = 3;
+TYPES.DOUBLE  = 4;
+TYPES.NUMBER  = 4; // Number is a double internally
+TYPES.STR     = 5;
+TYPES.STRING  = 5;
+TYPES.BUF     = 6;
+TYPES.BUFFER  = 6;
+
+// a duplex stream for passing events
+// holds the structure of the events
 var Protocol = function Protocol() {
+  Duplex.call(this);
+
   this.events = [];
-  this._version = null;
+  this._signature = null;
 };
-inherits(Protocol, Stream);
 
-Protocol.prototype.BYTE = 0;
-Protocol.prototype.SHORT = 1;
-Protocol.prototype.INT = Protocol.prototype.INTEGER = 2;
-Protocol.prototype.FLOAT = 3;
-Protocol.prototype.DOUBLE = 4;
-Protocol.prototype.STR = Protocol.prototype.STRING = 5;
-Protocol.prototype.BUF = Protocol.prototype.BUFFER = 6;
+inherits(Protocol, Duplex);
 
-Protocol.prototype.readable = true;
-Protocol.prototype.writable = true;
+Object.keys(TYPES).forEach(function(key) {
+  Protocol.prototype[key] = Protocol[key] = TYPES[key];
+});
 
-// returns a unique (though not sequential) representation of the protocol
-Protocol.prototype.version = function(encoding) {
-  if (typeof this._version === "number")
-    return this._version;
-  return this._version = crc.signed(JSON.stringify(this.events));
+Protocol.prototype._parse = function() {
+  this.parse = compiler.parser(this.events);
+  return this.parse.apply(this, arguments);
+};
+
+Protocol.prototype._serialize = function() {
+  this.serialize = compiler.serializer(this.events);
+  return this.serialize.apply(this, arguments);
+};
+
+// generates a unique signature for this protocol
+Protocol.prototype.signature = function(encoding) {
+  if (typeof this._signature === "number")
+    return this._signature;
+  return this._signature = crc.signed(JSON.stringify(this.events));
 };
 
 var nameRegex = /^[0-9a-z\-_]+$/i;
@@ -48,9 +67,7 @@ var reserved = {
 Protocol.prototype.clone = function() {
   var protocol = new Protocol();
   protocol.events = this.events.slice();
-  protocol._version = this._version;
-  protocol.parse = this.parse;
-  protocol.serialize = this.serialize;
+  protocol._signature = this._signature;
   return protocol;
 };
 
@@ -58,17 +75,17 @@ Protocol.prototype.clone = function() {
 // parameters is an object with a name-type mapping (string->number)
 // the parameters are reordered according to the ascii value, deprioritizing buffers and strings
 Protocol.prototype.event = function(name, parameters) {
-  this._version = null;
-  this.parse = this._parse;
-  this.serialize = this._serialize;
+  // currently only supports up to 256 events
   if (this.events.length >= 256)
     throw new Error("too many events");
   if (!nameRegex.test(name))
     throw new Error("event name contains invalid characters");
   if (reserved[name])
     throw new Error("event name is reserved");
+  // create a list of events, in alphabetical order
   var keys = Object.keys(parameters);
   keys.sort();
+  // prioritize primitives for efficiency
   var evt = [name], extra = [];
   for (var i = 0; i < keys.length; i++) {
     if (!paramRegex.test(keys[i]))
@@ -79,219 +96,41 @@ Protocol.prototype.event = function(name, parameters) {
     else
       extra.push([keys[i], type]);
   }
+  this._signature = null;
   this.events.push(evt.concat(extra));
 };
 
 Protocol.prototype.compile = function() {
-  this.compileParser();
-  this.compileSerializer();
+  this.parse = compiler.parser(this.events);
+  this.serialize = compiler.serializer(this.events);
 };
 
-Protocol.prototype._parse = function() {
-  this.compileParser();
-  return this.parse.apply(this, arguments);
+// ohhh-kay...
+Protocol.prototype._read = function(size) {
+  console.log("_read", size);
 };
 
-Protocol.prototype._serialize = function() {
-  this.compileSerializer();
-  return this.serialize.apply(this, arguments);
-};
-
-// for java compatibility
-// in-place swapping, voids data integrity
-// returns bytes "consumed"
-Protocol.prototype.decodeString = function(buf, offset) {
-  var length = buf.readInt16BE(buf, offset);
-  offset += 2;
-  var end = offset + length;
-  for (var i = offset; i < end; i++) {
-    var swp = buf[i + 1];
-    buf[i + 1] = buf[i];
-    buf[i] = swp;
-  }
-  buf.toString('ucs2', offset, end);
-  return length + 2;
-};
-
-// for java compatibility
-// length is precomputed and accurate
-// returns bytes written
-Protocol.prototype.encodeString = function(buf, str, offset, length) {
-  buf.writeInt16BE(length, offset);
-  var end = offset + length;
-  buf.write(str, offset += 2, end, 'ucs2');
-  for (var i = offset; i < end; i += 2) {
-    var swp = buf[i + 1];
-    buf[i + 1] = buf[i];
-    buf[i] = swp;
-  }
-  return length + 2;
-};
-
-Protocol.prototype.compileParser = function() {
-  // typechecking!
-  if (this.events.length > 256)
-    throw new Error("too many events");
-  var body = "var id = data[0], obj = {}, event, offset, totalOffset = 0;\n";
-  for (var i = 0; i < this.events.length; i++) {
-    var params = this.events[i];
-    body += (i > 0 ? " else " : "") + "if (id === " + i + ") {\n";
-    body += "event = '" + params[0] + "';\n";
-    var offset = 1;
-    for (var j = 1; j < params.length; j++) {
-      var type = params[j][1], getter;
-      switch (type) {
-      case 0:
-        getter = "data[" + (offset++) + "]";
-        break;
-      case 1:
-      case 2:
-        getter = "data.readInt" + (type * 16) + "BE(" + offset + ")";
-        offset += type * 2;
-        break;
-      case 3:
-        getter = "data.readFloatBE(" + offset + ")";
-        offset += 2;
-        break;
-      case 4:
-        getter = "data.readDoubleBE(" + offset + ")";
-        offset += 4;
-        break;
-      case 5:
-      case 6:
-        // actually size, not offset, but whatever
-        body += "offset = data.readInt32BE(" + offset + " + totalOffset);\n";
-        offset += 4;
-        getter = "data." + (type === 5 ? 'toString(\'utf8\', ' : 'slice(') + offset + " + totalOffset, " + offset + " + (totalOffset += offset)" + ")";
-        break;
-      default:
-        throw new Error("unknown type: " + type);
-      }
-      body += "obj." + params[j][0] + " = " + getter + ";\n";
-    }
-    body += "totalOffset += " + offset + ";\n";
-    body += "}";
-  }
-  body += " else {\n";
-  //body += "console.log(data);\n";
-  body += "throw new Error('unknown packet: ' + data[0]);\n";
-  body += "}\n";
-  body += "if (totalOffset < data.length) {\n";
-  body += "this.parse(data.slice(totalOffset));\n";
-  //body += "console.log('extra data', data.slice(totalOffset));\n";
-  body += "}\n";
-  body += "return this.emit(event, obj);";
-  //console.log(body);
-  this.parse = new Function("data", body);
-};
-
-Protocol.prototype.compileSerializer = function(typecheck) {
-  if (this.events.length > 256)
-    throw new Error("too many events");
-  if (typecheck !== false)
-    typecheck = true;
-  var body = "var data, size, offset, totalOffset = 0, sizes = {};\n";
-  for (var i = 0; i < this.events.length; i++) {
-    var params = this.events[i];
-    body += (i > 0 ? " else " : "") + "if (event === '" + params[0] + "') {\n";
-    var size = 1, sizeGetters = "";
-    for (var j = 1; j < params.length; j++) {
-      var name = params[j][0], type = params[j][1];
-      if (typecheck) {
-        body += "if (";
-        if (type < 6)
-          body += "typeof obj." + name + " !== '" + (type === 5 ? 'string' : 'number') + "'";
-        else if (type === 6)
-          body += "!Buffer.isBuffer(obj." + name + ")";
-        body += ")\n";
-        body += "throw new TypeError('";
-        if (type < 5)
-          body += "number";
-        else if (type < 6)
-          body += "string";
-        else
-          body += "buffer";
-        body += " required for " + name + "');\n";
-      }
-      if (type < 3)
-        size += Math.pow(2, type);
-      else if (type < 5)
-        size += Math.pow(2, type - 2);
-      else if (type === 5) {
-        size += 4;
-        sizeGetters += "size += sizes[" + j + "] = Buffer.byteLength(obj." + name + ");\n";
-      } else if (type === 6) {
-        size += 4;
-        sizeGetters += "size += obj." + name + ".length;\n";
-      } else
-        throw new Error("unknown type: " + type);
-    }
-    if (sizeGetters.length > 0) {
-      body += "size = " + size + ";\n" + sizeGetters;
-      body += "data = new Buffer(size);\n";
-    } else
-      body += "data = new Buffer(" + size + ");\n";
-    // add id
-    body += "data[0] = " + i + ";";
-    var offset = 1;
-    for (var j = 1; j < params.length; j++) {
-      var name = params[j][0], type = params[j][1], tail;
-      if (type === 0)
-        body += "data[" + (offset++) + "] = obj." + name + ";\n";
-      else if (type < 5) {
-        body += "data.write";
-        // tail because offset
-        tail = "BE(obj." + name + ", " + offset + ");\n";
-        if (type < 3) {
-          body += "Int" + type * 16;
-          offset += type * 2;
-        } else if (type === 3) {
-          body += "Float";
-          offset += 2;
-        } else if (type === 4) {
-          body += "Double";
-          offset += 4;
-        }
-        body += tail;
-      } else if (type === 5) {
-        body += "data.writeInt32BE(sizes[" + j + "], " + offset + " + totalOffset);\n";
-        offset += 4;
-        body += "data.write(obj." + name + ", " + offset + " + totalOffset, " + offset + " + (totalOffset += sizes[" + j + "]), 'utf8');\n";
-      } else if (type === 6) {
-        body += "data.writeInt32BE(obj." + name + ".length, " + offset + " + totalOffset);\n";
-        offset += 4;
-        body += "obj." + name + ".copy(data, " + offset + " + totalOffset);\n";
-        body += "totalOffset += obj." + name + ".length\n";
-      } else
-        throw new Error('unknown type: ' + type);
-    }
-    body += "}";
-  }
-  body += " else {\n";
-  body += "throw new Error('unknown packet: ' + event);\n";
-  body += "}\n";
-  body += "return this.emit('data', data);";
-  //console.log(body);
-  this.serialize = new Function("event", "obj", body);
-};
-
-// data for parsing, can be used with pipe
-Protocol.prototype.write = function(buffer) {
-  this.parse(buffer, emit.bind(this));
+// parse data from source stream
+Protocol.prototype._write = function(chunk, encoding, callback) {
+  console.log("_write", chunk.length);
+  this.parse(chunk, this._event.bind(this, callback));
   return true;
 };
 
-Protocol.prototype.end = function(buffer) {
-  if (buffer)
-    this.write(buffer);
-  this.readable = false;
-  this.writable = false;
-  this.emit('end');
+// called by the parser when a parse is completed
+Protocol.prototype._event = function(callback, err, event, obj) {
+  err || emit.call(this, event, obj);
+  callback(err);
 };
 
-// data for serializing
+// sends data to the source stream
 Protocol.prototype.send = function(event, obj) {
-  this.serialize.apply(this, arguments);
+  var data = this.serialize(event, obj, this._packet.bind(this));
+};
+
+Protocol.prototype._packet = function(err, data) {
+  this.push(data);
 };
 
 module.exports = Protocol;
+Protocol.Protocol = Protocol;
