@@ -4,7 +4,11 @@
 	"version": "0.0.5",
 	"author": "Eli Skeggs <skeggse@gmail.com>",
 	"dependencies": {
-		"buffer-crc32": "0.2.x"
+		"buffer-crc32": "0.2.x",
+		"readable-stream": "1.0.x"
+	},
+	"devDependencies": {
+		"underscore": "1.4.x"
 	},
 	"keywords": [
 		"stream",
@@ -12,8 +16,8 @@
 		"binary"
 	],
 	"repository": "git://github.com/skeggse/node-leash",
-	"main": "protocol",
-	"license": "LGPL 2.1",
+	"main": "leash.js",
+	"license": "MIT",
 	"engines": {
 		"node": ">= 0.6.x"
 	}
