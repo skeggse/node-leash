@@ -50,7 +50,7 @@ Alternatively, you can acquire from source:
 
 ### Data Types
 
-`node-leash` currently supports 8, 16 and 32 bit big-endian integers, floats, doubles, utf-8 strings, and raw buffers.
+`node-leash` currently supports 8, 16 and 32 bit big-endian integers (8-bit is unsigned), floats, doubles, utf-8 strings, and raw buffers.
 
 ### Streaming
 
@@ -64,6 +64,8 @@ Check out examples for a complete example.
 - Add some form of JSON serialization, to handle transfer of objects?
 - Add RPC!
 - Improve id allocation to enhance protocol backwards compatibility
+- Figure out support for [engine.io](https://github.com/LearnBoost/engine.io)
+  - engine.io does not support binary data, only utf-8 strings.
 
 ## License
 
