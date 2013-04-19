@@ -3,6 +3,10 @@ var colors = require('colors');
 var Leash = require('..');
 var randomBytes = require('crypto').randomBytes;
 
+// TODO: precompute tests, so as to remove time taken to randomly generate
+// and to improve consistency of times (uniform tests)
+// instead of computing average size in bytes, compute average difference
+
 var random = function(min, max) {
   min = min || 0;
   max = max || 0xFF;
@@ -77,10 +81,13 @@ random.leash = function(typecheck, special) {
 var noop = function() {};
 
 var testLeash = function(leash) {
+  var size = 0;
   var event = random.object(leash);
   leash.serialize(event[0], event[1], function(err, obj) {
+    size = obj.length;
     leash.parse(obj, noop);
   });
+  return size;
 };
 
 var THRESHOLD = 500;
@@ -88,29 +95,34 @@ var THRESHOLD = 500;
 // benchmark a function
 var bench = function(name, func) {
   var start = Date.now(), duration;
-  var times = 10;
+  var rounds = 10, size = 0;
 
-  while (times--)
-    func();
+  for (var count = rounds; count--; )
+    size += func();
 
   duration = Date.now() - start;
+
+  size /= rounds;
   console.log(name.red + ' completed'.green.bold + ' in ' + duration + 'ms');
+  console.log("    average number of bytes: " + size.toFixed(0).bold.blue);
 };
 
 bench('leash (precompiled)', function() {
+  var size = 0, rounds = 1000;
   var leash = random.leash();
   leash.compile();
-  for (var count = 1000; count--; ) {
-    testLeash(leash);
-  }
+  for (var count = 1000; count--; )
+    size += testLeash(leash);
+  return size / rounds;
 });
 
 bench('leash (precompiled, typecheck)', function() {
+  var size = 0, rounds = 1000;
   var leash = random.leash(true);
   leash.compile();
-  for (var count = 1000; count--; ) {
-    testLeash(leash);
-  }
+  for (var count = rounds; count--; )
+    size += testLeash(leash);
+  return size / rounds;
 });
 
 /*bench('leash (no-compilation)', function() {
@@ -122,7 +134,11 @@ bench('leash (precompiled, typecheck)', function() {
 });*/
 
 bench('json (built-in)', function() {
-  for (var count = 1000; count--; ) {
-    var data = JSON.parse(JSON.stringify(random.object()));
+  var size = 0, rounds = 1000;
+  for (var count = rounds; count--; ) {
+    var trans = JSON.stringify(random.object());
+    size += Buffer.byteLength(trans);
+    var data = JSON.parse(trans);
   }
+  return size / rounds;
 });
