@@ -1,6 +1,7 @@
 var crc = require('buffer-crc32');
 var Duplex = require('readable-stream').Duplex;
 var inherits = require('util').inherits;
+var _ = require('underscore');
 
 var compiler = require('./compiler');
 
@@ -19,10 +20,17 @@ TYPES.STRING  = 5;
 TYPES.BUF     = 6;
 TYPES.BUFFER  = 6;
 
+var defaults = {
+  typecheck: true,
+  special: false
+};
+
 // a duplex stream for passing events
 // holds the structure of the events
-var Protocol = function Protocol() {
+var Protocol = function Protocol(options) {
   Duplex.call(this);
+
+  this.options = _.defaults(options, defaults);
 
   this.events = [];
   this._signature = null;
@@ -76,7 +84,7 @@ Protocol.prototype.clone = function() {
 // the parameters are reordered according to the ascii value, deprioritizing buffers and strings
 Protocol.prototype.event = function(name, parameters) {
   // currently only supports up to 256 events
-  if (this.events.length >= 256)
+  if (this.events.length >= 0x100)
     throw new Error("too many events");
   if (!nameRegex.test(name))
     throw new Error("event name contains invalid characters");
@@ -101,8 +109,16 @@ Protocol.prototype.event = function(name, parameters) {
 };
 
 Protocol.prototype.compile = function() {
-  this.parse = compiler.parser(this.events);
-  this.serialize = compiler.serializer(this.events);
+  this.compileParser();
+  this.compileSerializer();
+};
+
+Protocol.prototype.compileParser = function() {
+  this.parse = compiler.parser(this.events, this.options);
+};
+
+Protocol.prototype.compileSerializer = function() {
+  this.serialize = compiler.serializer(this.events, this.options);
 };
 
 // ohhh-kay...
