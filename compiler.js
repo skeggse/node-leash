@@ -1,17 +1,39 @@
+var _ = require('underscore');
+
+var specialValues = function() {
+  var values = [NaN, Infinity, -Infinity], types = {Float: 3, Double: 4};
+  var special = {};
+  for (var type in types) {
+    var s = special[types[type]] = {};
+    for (var i = 0; i < values.length; i++) {
+      s[values[i]] = new Buffer(Math.pow(2, types[type] - 1));
+      s[values[i]]['write' + type + 'BE'](values[i], 0, true);
+    }
+  }
+  return special;
+};
+
+var special = specialValues();
+
+var sDefaults = {
+  typecheck: true,
+  special: false
+};
+
 // compiles a serializer
-exports.serializer = function(events, typecheck) {
+exports.serializer = function(events, options) {
   if (events.length > 256)
     throw new Error("too many events");
-  if (typecheck !== false)
-    typecheck = true;
+  options = _.defaults(options, sDefaults);
   var body = "var data, size, offset, totalOffset = 0, sizes = {};\n";
+  body += "try {\n";
   for (var i = 0; i < events.length; i++) {
     var params = events[i];
     body += (i > 0 ? " else " : "") + "if (event === '" + params[0] + "') {\n";
     var size = 1, sizeGetters = "";
     for (var j = 1; j < params.length; j++) {
       var name = params[j][0], type = params[j][1];
-      if (typecheck) {
+      if (options.typecheck) {
         body += "if (";
         if (type < 6)
           body += "typeof obj." + name + " !== '" + (type === 5 ? 'string' : 'number') + "'";
@@ -53,6 +75,20 @@ exports.serializer = function(events, typecheck) {
       if (type === 0)
         body += "data[" + (offset++) + "] = obj." + name + ";\n";
       else if (type < 5) {
+        // this "block" for NaN, Infinity, -Infinity
+        if (options.special && (type === 3 || type === 4)) {
+          var s = special[type];
+          body += "if (isNaN(obj." + name + ")) {\n";
+          for (var k = 0, toff = offset; k < s.NaN.length; k++)
+            body += "data[" + (toff++) + "] = " + s.NaN[k] + ";"
+          body += "\n} else if (obj." + name + " === Infinity) {\n";
+          for (var k = 0, toff = offset; k < s.Infinity.length; k++)
+            body += "data[" + (toff++) + "] = " + s.Infinity[k] + ";"
+          body += "\n} else if (obj." + name + " === -Infinity) {\n";
+          for (var k = 0, toff = offset; k < s[-Infinity].length; k++)
+            body += "data[" + (toff++) + "] = " + s[-Infinity][k] + ";"
+          body += "\n} else\n";
+        }
         body += "data.write";
         // tail because offset
         tail = "BE(obj." + name + ", " + offset + ");\n";
@@ -83,6 +119,10 @@ exports.serializer = function(events, typecheck) {
   }
   body += " else {\n";
   body += "return callback(new Error('unknown event: ' + event));\n";
+  body += "}\n";
+  body += "} catch (e) {\n";
+  body += "console.log(event, obj, data);\n";
+  body += "throw e;\n";
   body += "}\n";
   body += "return callback(null, data);";
   return new Function("event", "obj", "callback", body);
@@ -143,3 +183,6 @@ exports.parser = function(events) {
   body += "return callback(null, event, obj);";
   return new Function("data", "callback", body);
 };
+
+if (require.main === module)
+  exports.serializer([['test', ['name', 3]]]);
