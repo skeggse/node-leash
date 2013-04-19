@@ -3,6 +3,12 @@ node-leash
 
 A lightweight streaming parser and serializer for binary data in [node](http://nodejs.org).
 
+`node-leash` attempts to simplify the maintenance of bidirectional protocols across binary streams by exposing a Duplex binary stream in the form of a "leash" that you can add events to.  Preliminary benchmarks show that this is up to twice as fast to encode and decode than JSON, and compresses to approximately one fourth the size, as it eliminates the info on the transfer of the structure of the data.
+
+As it stands, a maximum of 256 events are supported, to reduce the header of each event to a singular byte.
+
+Supported data includes Numbers, Strings, and Buffers.  `node-leash` currently only facilitates the transfer of Objects, not Arrays or simpler data--though specifying only one property on the object effectively transfers only one value.
+
 ```js
 var Leash = require('node-leash');
 
