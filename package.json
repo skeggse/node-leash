@@ -5,10 +5,11 @@
 	"author": "Eli Skeggs <skeggse@gmail.com>",
 	"dependencies": {
 		"buffer-crc32": "0.2.x",
+		"underscore": "1.4.x",
 		"readable-stream": "1.0.x"
 	},
 	"devDependencies": {
-		"underscore": "1.4.x"
+		"colors": "0.6.x"
 	},
 	"keywords": [
 		"stream",
