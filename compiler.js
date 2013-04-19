@@ -20,6 +20,8 @@ var sDefaults = {
   special: false
 };
 
+exports.EXPERIMENTAL = {};
+
 // compiles a serializer
 exports.serializer = function(events, options) {
   if (events.length > 256)
@@ -76,7 +78,7 @@ exports.serializer = function(events, options) {
         body += "data[" + (offset++) + "] = obj." + name + ";\n";
       else if (type < 5) {
         // this "block" for NaN, Infinity, -Infinity
-        if (options.special && (type === 3 || type === 4)) {
+        if (options.special && options.special !== exports.EXPERIMENTAL && (type === 3 || type === 4)) {
           var s = special[type];
           body += "if (isNaN(obj." + name + ")) {\n";
           for (var k = 0, toff = offset; k < s.NaN.length; k++)
@@ -91,7 +93,7 @@ exports.serializer = function(events, options) {
         }
         body += "data.write";
         // tail because offset
-        tail = "BE(obj." + name + ", " + offset + ");\n";
+        tail = "BE(obj." + name + ", " + offset;
         if (type < 3) {
           body += "Int" + type * 16;
           offset += Math.pow(2, type);
@@ -103,6 +105,9 @@ exports.serializer = function(events, options) {
           offset += 8;
         }
         body += tail;
+        if (options.special == exports.EXPERIMENTAL)
+          body += ", true";
+        body += ");\n";
       } else if (type === 5) {
         body += "data.writeInt32BE(sizes[" + j + "], " + offset + " + totalOffset);\n";
         offset += 4;
