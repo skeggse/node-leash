@@ -1,26 +1,9 @@
 var _ = require('underscore');
 
-var specialValues = function() {
-  var values = [NaN, Infinity, -Infinity], types = {Float: 3, Double: 4};
-  var special = {};
-  for (var type in types) {
-    var s = special[types[type]] = {};
-    for (var i = 0; i < values.length; i++) {
-      s[values[i]] = new Buffer(Math.pow(2, types[type] - 1));
-      s[values[i]]['write' + type + 'BE'](values[i], 0, true);
-    }
-  }
-  return special;
-};
-
-var special = specialValues();
-
 var sDefaults = {
   typecheck: true,
   special: false
 };
-
-exports.EXPERIMENTAL = {};
 
 // compiles a serializer
 exports.serializer = function(events, options) {
@@ -77,20 +60,6 @@ exports.serializer = function(events, options) {
       if (type === 0)
         body += "data[" + (offset++) + "] = obj." + name + ";\n";
       else if (type < 5) {
-        // this "block" for NaN, Infinity, -Infinity
-        if (options.special && options.special !== exports.EXPERIMENTAL && (type === 3 || type === 4)) {
-          var s = special[type];
-          body += "if (isNaN(obj." + name + ")) {\n";
-          for (var k = 0, toff = offset; k < s.NaN.length; k++)
-            body += "data[" + (toff++) + "] = " + s.NaN[k] + ";"
-          body += "\n} else if (obj." + name + " === Infinity) {\n";
-          for (var k = 0, toff = offset; k < s.Infinity.length; k++)
-            body += "data[" + (toff++) + "] = " + s.Infinity[k] + ";"
-          body += "\n} else if (obj." + name + " === -Infinity) {\n";
-          for (var k = 0, toff = offset; k < s[-Infinity].length; k++)
-            body += "data[" + (toff++) + "] = " + s[-Infinity][k] + ";"
-          body += "\n} else\n";
-        }
         body += "data.write";
         // tail because offset
         tail = "BE(obj." + name + ", " + offset;
@@ -105,7 +74,7 @@ exports.serializer = function(events, options) {
           offset += 8;
         }
         body += tail;
-        if (options.special == exports.EXPERIMENTAL)
+        if (options.special)
           body += ", true";
         body += ");\n";
       } else if (type === 5) {
