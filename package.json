@@ -1,25 +1,31 @@
 {
-	"name": "node-leash",
-	"description": "A lightweight streaming parser and serializer for binary data in node.",
-	"version": "0.2.1",
-	"author": "Eli Skeggs <skeggse@gmail.com>",
-	"dependencies": {
-		"buffer-crc32": "0.2.x",
-		"underscore": "1.4.x",
-		"readable-stream": "1.0.x"
-	},
-	"devDependencies": {
-		"colors": "0.6.x"
-	},
-	"keywords": [
-		"stream",
-		"buffer",
-		"binary"
-	],
-	"repository": "git://github.com/skeggse/node-leash",
-	"main": "leash.js",
-	"license": "MIT",
-	"engines": {
-		"node": ">= 0.6.x"
-	}
+  "name": "node-leash",
+  "description": "A lightweight streaming parser and serializer for binary data in node.",
+  "version": "0.2.1",
+  "author": "Eli Skeggs <skeggse@gmail.com>",
+  "dependencies": {
+    "buffer-crc32": "0.2.x",
+    "underscore": "1.4.x",
+    "readable-stream": "1.0.x",
+    "hashtable": "0.1.x"
+  },
+  "devDependencies": {
+    "colors": "0.6.x",
+    "mocha": "1.9.x",
+    "should": "1.2.x"
+  },
+  "keywords": [
+    "stream",
+    "buffer",
+    "binary"
+  ],
+  "repository": "git://github.com/skeggse/node-leash",
+  "main": "leash.js",
+  "scripts": {
+    "test": "make test"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">= 0.8.x"
+  }
 }
