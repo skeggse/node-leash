@@ -1,9 +1,11 @@
-var crc = require('buffer-crc32');
+//var crc = require('buffer-crc32');
 var Duplex = require('readable-stream').Duplex;
 var inherits = require('util').inherits;
 var _ = require('underscore');
 
-var compiler = require('./compiler');
+var NumberMap = require('./map');
+
+var Packet = require('./packet');
 
 var emit = Duplex.prototype.emit;
 
@@ -20,44 +22,27 @@ TYPES.STRING  = 5;
 TYPES.BUF     = 6;
 TYPES.BUFFER  = 6;
 
-var defaults = {
-  typecheck: true,
-  special: false
-};
-
 // a duplex stream for passing events
 // holds the structure of the events
-var Protocol = function Protocol(options) {
+var Leash = function Leash(options) {
   Duplex.call(this);
 
-  this.options = _.defaults(options, defaults);
+  this.options = options || {};
 
-  this.events = [];
-  this._signature = null;
+  // regular events [0x00-0xFF)
+  this.packets = new Array(0xFF);
+  // other events
+  this.extendedPackets = {};
+
+  // named events
+  this.namedPackets = {};
 };
 
-inherits(Protocol, Duplex);
+inherits(Leash, Duplex);
 
 Object.keys(TYPES).forEach(function(key) {
-  Protocol.prototype[key] = Protocol[key] = TYPES[key];
+  Leash.prototype[key] = Leash[key] = TYPES[key];
 });
-
-Protocol.prototype._parse = function() {
-  this.parse = compiler.parser(this.events);
-  return this.parse.apply(this, arguments);
-};
-
-Protocol.prototype._serialize = function() {
-  this.serialize = compiler.serializer(this.events);
-  return this.serialize.apply(this, arguments);
-};
-
-// generates a unique signature for this protocol
-Protocol.prototype.signature = function(encoding) {
-  if (typeof this._signature === "number")
-    return this._signature;
-  return this._signature = crc.signed(JSON.stringify(this.events));
-};
 
 var nameRegex = /^[0-9a-z\-_]+$/i;
 var paramRegex = /^[a-z_][0-9a-z_]*$/i;
@@ -71,30 +56,26 @@ var reserved = {
   newListener: true
 };
 
-// creates an identical protocol, using the compiled functions if applicable
-Protocol.prototype.clone = function() {
-  var protocol = new Protocol();
-  protocol.events = this.events.slice();
-  protocol._signature = this._signature;
-  return protocol;
-};
-
 // adds an event
 // parameters is an object with a name-type mapping (string->number)
-// the parameters are reordered according to the ascii value, deprioritizing buffers and strings
-Protocol.prototype.event = function(name, parameters) {
-  // currently only supports up to 256 events
-  if (this.events.length >= 0x100)
-    throw new Error("too many events");
+// the parameters are lexographically ordered, deprioritizing buffers and strings
+Leash.prototype.event =
+Leash.prototype.define = function(id, name, parameters) {
+  if (typeof id !== 'number' || id < 0 || (id | 0) !== id)
+    throw new Error("event id must be a positive integer");
   if (!nameRegex.test(name))
-    throw new Error("event name contains invalid characters");
+    throw new Error("event name contains special characters");
   if (reserved[name])
     throw new Error("event name is reserved");
-  // create a list of events, in alphabetical order
+  if ((id < 0xFF && this.packets[id]) || (id >= 0xFF && this.extendedPackets[id]))
+    throw new Error("event id already defined");
+  if (this.namedPackets[name])
+    throw new Error("event name already defined");
+  // create a list of events, in lexographic order
   var keys = Object.keys(parameters);
   keys.sort();
   // prioritize primitives for efficiency
-  var evt = [name], extra = [];
+  var evt = [], extra = [];
   for (var i = 0; i < keys.length; i++) {
     if (!paramRegex.test(keys[i]))
       throw new Error("param name contains invalid characters");
@@ -104,49 +85,88 @@ Protocol.prototype.event = function(name, parameters) {
     else
       extra.push([keys[i], type]);
   }
-  this._signature = null;
-  this.events.push(evt.concat(extra));
+  var packet = new Packet(id, name, evt.concat(extra), this.options);
+  if (id < 0xFF)
+    this.packets[id] = packet;
+  else
+    this.extendedPackets[id] = packet;
+  this.namedPackets[name] = packet;
 };
 
-Protocol.prototype.compile = function() {
-  this.compileParser();
-  this.compileSerializer();
+Leash.prototype.compile = function() {
+  for (var name in this.namedPackets)
+    this.namedPackets[name].compile();
 };
 
-Protocol.prototype.compileParser = function() {
-  this.parse = compiler.parser(this.events, this.options);
+Leash.prototype.serialize =
+Leash.prototype.encode = function(eventName, object, callback) {
+  var packet = this.namedPackets[eventName];
+  if (!packet)
+    throw new Error('no matching event');
+  process.nextTick(function() {
+    var data;
+    try {
+      data = packet.encode(object);
+    } catch (e) {
+      return callback(e);
+    }
+    callback(null, data);
+  });
 };
 
-Protocol.prototype.compileSerializer = function() {
-  this.serialize = compiler.serializer(this.events, this.options);
+Leash.prototype.deserialize =
+Leash.prototype.parse =
+Leash.prototype.decode = function(data, callback) {
+  var packet = data[0] === 0xFF ? this.extendedPackets[data.readUInt32BE(1)] : this.packets[data[0]];
+  if (!packet)
+    throw new Error('no matching event');
+  process.nextTick(function() {
+    var obj;
+    try {
+      obj = packet.decode(data);
+    } catch (e) {
+      return callback(e);
+    }
+    callback(null, packet.name, obj);
+  });
+};
+
+// for testing, encodes and decodes the object
+Leash.prototype.reconstruct = function(event, object, callback) {
+  var self = this;
+  this.encode(event, object, function(err, data) {
+    if (err)
+      return callback(err);
+    self.decode(data, callback);
+  });
 };
 
 // ohhh-kay...
-Protocol.prototype._read = function(size) {
+Leash.prototype._read = function(size) {
   console.log("_read", size);
 };
 
 // parse data from source stream
-Protocol.prototype._write = function(chunk, encoding, callback) {
+Leash.prototype._write = function(chunk, encoding, callback) {
   console.log("_write", chunk.length);
-  this.parse(chunk, this._event.bind(this, callback));
+  this.decode(chunk, this._event.bind(this, callback));
   return true;
 };
 
 // called by the parser when a parse is completed
-Protocol.prototype._event = function(callback, err, event, obj) {
+Leash.prototype._event = function(callback, err, event, obj) {
   err || emit.call(this, event, obj);
   callback(err);
 };
 
 // sends data to the source stream
-Protocol.prototype.send = function(event, obj) {
-  var data = this.serialize(event, obj, this._packet.bind(this));
+Leash.prototype.send = function(event, obj) {
+  var data = this.encode(event, obj, this._packet.bind(this));
 };
 
-Protocol.prototype._packet = function(err, data) {
+Leash.prototype._packet = function(err, data) {
   this.push(data);
 };
 
-module.exports = Protocol;
-Protocol.Protocol = Protocol;
+module.exports = Leash;
+Leash.Leash = Leash;
