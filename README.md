@@ -5,18 +5,16 @@ A lightweight streaming parser and serializer for binary data in [node](http://n
 
 `node-leash` attempts to simplify the maintenance of bidirectional protocols across binary streams by exposing a Duplex binary stream in the form of a "leash" that you can add events to.  Preliminary benchmarks show that this is up to twice as fast to encode and decode than JSON, and compresses to approximately one fourth the size, as it eliminates the info on the transfer of the structure of the data.
 
-As it stands, a maximum of 256 events are supported, to reduce the header of each event to a singular byte.
-
-Supported data includes Numbers, Strings, and Buffers.  `node-leash` currently only facilitates the transfer of Objects, not Arrays or simpler data--though specifying only one property on the object effectively transfers only one value.
+Supported data includes Numbers, Strings, and Buffers.  `node-leash` currently only facilitates the transfer of a single Object, no Arrays or simpler data--though specifying only one property on the object effectively transfers only one value.
 
 ```js
 var Leash = require('node-leash');
 
 var leash = new Leash();
-leash.event('ping', {id: Leash.INT});
-leash.event('chunk', {id: Leash.INT, data: Leash.BUFFER});
-leash.event('message', {id: Leash.INT, message: Leash.STRING});
-leash.event('initialize', {
+leash.define(0, 'ping', {id: Leash.INT});
+leash.define(1, 'chunk', {id: Leash.INT, data: Leash.BUFFER});
+leash.define(2, 'message', {id: Leash.INT, message: Leash.STRING});
+leash.define(3, 'initialize', {
   id: Leash.INT,
   x: Leash.DOUBLE,
   y: Leash.DOUBLE,
@@ -60,18 +58,21 @@ Alternatively, you can acquire from source:
 
 ### Streaming
 
-`node-leash` is an extension of [Stream](http://nodejs.org/api/stream.html) for Node.js v0.10, and as such can be used with other streams via `pipe`.  Most importantly, `node-leash` can be used with the `net` module, providing automatic serialization and parsing of events across a network connection.
+`node-leash` is an extension of [Stream](http://nodejs.org/api/stream.html) for Node.js v0.10, and as such can be used with other streams via `pipe`.  Most importantly, `node-leash` can be used with the `net` module, providing automatic serialization and parsing of events across a network connection.  Additionally, `node-leash` makes use of the `readable-stream` module, which provides backwards-compatibility for Node.js v0.8
 
 Check out examples for a complete example.
 
 ### TODO
 
-- Add unittests!
 - Add some form of JSON serialization, to handle transfer of objects?
 - Add RPC!
 - Improve index allocation to enhance protocol backwards compatibility
 - Figure out support for [engine.io](https://github.com/LearnBoost/engine.io)
   - engine.io does not support binary data, only utf-8 strings.
+
+### Notes
+
+- Relies on [a pull request](https://github.com/visionmedia/should.js/pull/112) to should.js for `Object.should.approximate` for testing.
 
 ## License
 
