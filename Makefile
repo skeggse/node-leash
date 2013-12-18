@@ -1,4 +1,4 @@
-REPORTER = spec
+REPORTER = dot
 
 check: test
 
