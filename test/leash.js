@@ -1,6 +1,27 @@
-var should = require('should');
-var Leash = require('..');
+var expect = require('expect.js');
 var crypto = require('crypto');
+
+var Leash = require('..');
+
+var util = require('util');
+var Assertion = expect.Assertion;
+
+/**
+ * Assert within value +- delta (inclusive).
+ *
+ * @param {Number} value
+ * @param {Number} delta
+ * @api public
+ */
+
+Assertion.prototype.approximate =
+Assertion.prototype.approximately = function (value, delta) {
+  this.assert(
+      Math.abs(this.obj - value) <= delta
+    , function(){ return 'expected ' + util.inspect(this.obj) + ' to be approximately ' + value + ' +- ' + delta }
+    , function(){ return 'expected ' + util.inspect(this.obj) + ' to not be approximately ' + value + " +- " + delta });
+  return this;
+};
 
 describe('Leash', function() {
   var leash;
@@ -32,28 +53,34 @@ describe('Leash', function() {
       leash.encode('event-0', {prop1: 0.8, prop2: crypto.randomBytes(9)}, function(err, data) {
         if (err)
           return done(err);
-        data.should.be.an.instanceOf(Buffer);
+        expect(data).to.be.a(Buffer);
         done();
       });
     });
 
-    it('should fail with NaN', function(done) {
+    it('should support NaN', function(done) {
       leash.encode('event-0', {prop1: NaN, prop2: crypto.randomBytes(9)}, function(err, data) {
-        err.should.be.an.instanceOf(Error);
+        if (err)
+          return done(err);
+        expect(data).to.be.a(Buffer);
         done();
       });
     });
 
-    it('should fail with Infinity', function(done) {
+    it('should support Infinity', function(done) {
       leash.encode('event-0', {prop1: Infinity, prop2: crypto.randomBytes(9)}, function(err, data) {
-        err.should.be.an.instanceOf(Error);
+        if (err)
+          return done(err);
+        expect(data).to.be.a(Buffer);
         done();
       });
     });
 
-    it('should fail with -Infinity', function(done) {
+    it('should support -Infinity', function(done) {
       leash.encode('event-0', {prop1: -Infinity, prop2: crypto.randomBytes(9)}, function(err, data) {
-        err.should.be.an.instanceOf(Error);
+        if (err)
+          return done(err);
+        expect(data).to.be.a(Buffer);
         done();
       });
     });
@@ -94,9 +121,8 @@ describe('Leash', function() {
         leash.decode(data, function(err, name, object) {
           if (err)
             return done(err);
-          name.should.equal('event-0');
-          should.exist(object);
-          object.should.be.a('object');
+          expect(name).to.equal('event-0');
+          expect(object).to.be.an('object');
           done();
         });
       });
@@ -142,10 +168,9 @@ describe('Leash', function() {
       leash.reconstruct('ping', objects.ping, function(err, name, object) {
         if (err)
           return done(err);
-        name.should.equal('ping');
-        should.exist(object);
-        object.should.be.a('object').and.have.keys('id');
-        object.id.should.equal(objects.ping.id);
+        expect(name).to.equal('ping');
+        expect(object).to.be.an('object');
+        expect(object).to.only.have.property('id', objects.ping.id);
         done();
       });
     });
@@ -154,11 +179,11 @@ describe('Leash', function() {
       leash.reconstruct('chunk', objects.chunk, function(err, name, object) {
         if (err)
           return done(err);
-        name.should.equal('chunk');
-        should.exist(object);
-        object.should.be.a('object').and.have.keys('id', 'data');
-        object.id.should.equal(objects.chunk.id);
-        object.data.should.be.an.instanceof(Buffer).and.eql(objects.chunk.data);
+        expect(name).to.equal('chunk');
+        expect(object).to.be.an('object');
+        expect(object).to.only.have.keys('id', 'data');
+        expect(object.id).to.equal(objects.chunk.id);
+        expect(object.data).to.eql(objects.chunk.data);
         done();
       });
     });
@@ -167,11 +192,11 @@ describe('Leash', function() {
       leash.reconstruct('message', objects.message, function(err, name, object) {
         if (err)
           return done(err);
-        name.should.equal('message');
-        should.exist(object);
-        object.should.be.a('object').and.have.keys('id', 'message');
-        object.id.should.equal(objects.message.id);
-        object.message.should.equal(objects.message.message);
+        expect(name).to.equal('message');
+        expect(object).to.be.an('object');
+        expect(object).to.only.have.keys('id', 'message');
+        expect(object.id).to.equal(objects.message.id);
+        expect(object.message).to.equal(objects.message.message);
         done();
       });
     });
@@ -180,18 +205,18 @@ describe('Leash', function() {
       leash.reconstruct('initialize', objects.initialize, function(err, name, object) {
         if (err)
           return done(err);
-        name.should.equal('initialize');
-        should.exist(object);
-        object.should.be.a('object').and.have.keys('id', 'x', 'y', 'z', 'items', 'chunk', 'type', 'name', 'something');
-        object.id.should.equal(objects.initialize.id, 'id');
-        object.x.should.equal(objects.initialize.x, 'x');
-        object.y.should.equal(objects.initialize.y, 'y');
-        object.z.should.equal(objects.initialize.z, 'z');
-        object.items.should.equal(objects.initialize.items, 'items');
-        object.chunk.should.eql(objects.initialize.chunk, 'chunk');
-        object.type.should.equal(objects.initialize.type, 'type');
-        object.name.should.equal(objects.initialize.name, 'name');
-        object.something.should.approximate(objects.initialize.something);
+        expect(name).to.equal('initialize');
+        expect(object).to.be.an('object');
+        expect(object).to.only.have.keys('id', 'x', 'y', 'z', 'items', 'chunk', 'type', 'name', 'something');
+        expect(object.id).to.equal(objects.initialize.id);
+        expect(object.x).to.equal(objects.initialize.x);
+        expect(object.y).to.equal(objects.initialize.y);
+        expect(object.z).to.equal(objects.initialize.z);
+        expect(object.items).to.equal(objects.initialize.items);
+        expect(object.chunk).to.eql(objects.initialize.chunk);
+        expect(object.type).to.equal(objects.initialize.type);
+        expect(object.name).to.equal(objects.initialize.name);
+        expect(object.something).to.approximate(objects.initialize.something, 1E-6);
         done();
       });
     });

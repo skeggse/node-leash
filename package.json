@@ -5,14 +5,12 @@
   "author": "Eli Skeggs <skeggse@gmail.com>",
   "dependencies": {
     "buffer-crc32": "0.2.x",
-    "underscore": "1.4.x",
-    "readable-stream": "1.0.x",
-    "hashtable": "0.1.x"
+    "readable-stream": "1.0.x"
   },
   "devDependencies": {
     "colors": "0.6.x",
     "mocha": "1.9.x",
-    "should": "1.2.x"
+    "expect.js": "~0.2.0"
   },
   "keywords": [
     "stream",
@@ -20,7 +18,7 @@
     "binary"
   ],
   "repository": "git://github.com/skeggse/node-leash",
-  "main": "leash.js",
+  "main": "lib/leash.js",
   "scripts": {
     "test": "make test"
   },
