@@ -3,6 +3,7 @@
   "description": "A lightweight streaming parser and serializer for binary data in node.",
   "version": "0.4.0",
   "author": "Eli Skeggs <skeggse@gmail.com>",
+  "homepage": "https://github.com/skeggse/node-leash",
   "dependencies": {
     "buffer-crc32": "0.2.x",
     "underscore": "1.4.x",

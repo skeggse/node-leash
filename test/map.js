@@ -1,3 +1,5 @@
+return;
+
 var should = require('should');
 var _ = require('underscore');
 var IntegerMap = require('../map');

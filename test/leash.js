@@ -103,7 +103,7 @@ describe('Leash', function() {
     });
   });
 
-  describe('reconstruct', function() {
+  describe('#reconstruct', function() {
     var objects = {};
 
     objects.ping = {id: (Math.random() * 1024) | 0};

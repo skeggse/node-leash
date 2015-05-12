@@ -21,6 +21,7 @@ TYPES.STR     = 5;
 TYPES.STRING  = 5;
 TYPES.BUF     = 6;
 TYPES.BUFFER  = 6;
+TYPES.BINARY  = 6;
 
 // a duplex stream for passing events
 // holds the structure of the events
@@ -56,7 +57,7 @@ var reserved = {
   newListener: true
 };
 
-// adds an event
+// defines an event
 // parameters is an object with a name-type mapping (string->number)
 // the parameters are lexographically ordered, deprioritizing buffers and strings
 Leash.prototype.event =
@@ -91,6 +92,8 @@ Leash.prototype.define = function(id, name, parameters) {
   else
     this.extendedPackets[id] = packet;
   this.namedPackets[name] = packet;
+  // buffers
+  this.previousData = null;
 };
 
 Leash.prototype.compile = function() {
@@ -98,9 +101,9 @@ Leash.prototype.compile = function() {
     this.namedPackets[name].compile();
 };
 
-Leash.prototype.serialize =
-Leash.prototype.encode = function(eventName, object, callback) {
-  var packet = this.namedPackets[eventName];
+// encodes and sends data
+Leash.prototype.send = function(eventName, object) {
+  var self = this, packet = this.namedPackets[eventName];
   if (!packet)
     throw new Error('no matching event');
   process.nextTick(function() {
@@ -108,47 +111,79 @@ Leash.prototype.encode = function(eventName, object, callback) {
     try {
       data = packet.encode(object);
     } catch (e) {
-      return callback(e);
+      return self.emit('error', e);
     }
-    callback(null, data);
+    self.push(data);
   });
 };
 
-Leash.prototype.deserialize =
-Leash.prototype.parse =
-Leash.prototype.decode = function(data, callback) {
-  var packet = data[0] === 0xFF ? this.extendedPackets[data.readUInt32BE(1)] : this.packets[data[0]];
-  if (!packet)
-    throw new Error('no matching event');
+// return packet, size
+Leash.prototype._readHeader = function(data) {
+  var packet, size;
+  if (data[0] === 0xFF) {
+    if (data.length < 5)
+      return null;
+    packet = this.extendedPackets[data.readUInt32BE(1)];
+    if (!packet)
+      return false;
+    if (packet.isStatic)
+      size = packet.staticSize;
+    else if (data.length >= 9)
+      size = data.readUInt32BE(5);
+    else
+      return null;
+  } else {
+    packet = this.packets[data[0]];
+    if (!packet)
+      return false;
+    if (packet.isStatic)
+      size = packet.staticSize;
+    else if (data.length >= 5)
+      size = data.readUInt32BE(1);
+    else
+      return null;
+  }
+  return {packet: packet, size: size};
+};
+
+// TODO: handle callback
+Leash.prototype._write = function(data, encoding, callback) {
+  // no data, don't bother
+  if (!data.length)
+    return callback();
+  // add queued data
+  if (this.previousData) {
+    data = Buffer.concat([this.previousData, data], this.previousData.length + data.length);
+    this.previousData = null;
+  }
+  // parse header
+  var header = this._readHeader(data), self = this;
+  if (header === false)
+    return this.emit('error', new Error('unknown packet'));
+  if (!header || data.length < header.size) {
+    this.previousData = data;
+    return;
+  }
+  // decode data
   process.nextTick(function() {
     var obj;
     try {
       obj = packet.decode(data);
     } catch (e) {
-      return callback(e);
+      self.emit('error', e);
     }
-    callback(null, packet.name, obj);
+    self.emit(packet.name, obj);
   });
-};
-
-// for testing, encodes and decodes the object
-Leash.prototype.reconstruct = function(event, object, callback) {
-  var self = this;
-  this.encode(event, object, function(err, data) {
-    if (err)
-      return callback(err);
-    self.decode(data, callback);
-  });
+  // decode extra data
+  if (data.length > header.size)
+    this._write(data.slice(header.size), encoding, callback);
 };
 
 // ohhh-kay...
-Leash.prototype._read = function(size) {
-  console.log("_read", size);
-};
+Leash.prototype._read = function(size) {};
 
 // parse data from source stream
 Leash.prototype._write = function(chunk, encoding, callback) {
-  console.log("_write", chunk.length);
   this.decode(chunk, this._event.bind(this, callback));
   return true;
 };
@@ -157,15 +192,6 @@ Leash.prototype._write = function(chunk, encoding, callback) {
 Leash.prototype._event = function(callback, err, event, obj) {
   err || emit.call(this, event, obj);
   callback(err);
-};
-
-// sends data to the source stream
-Leash.prototype.send = function(event, obj) {
-  var data = this.encode(event, obj, this._packet.bind(this));
-};
-
-Leash.prototype._packet = function(err, data) {
-  this.push(data);
 };
 
 module.exports = Leash;

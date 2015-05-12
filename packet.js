@@ -133,7 +133,7 @@ var Packet = function Packet(id, name, params, options) {
   this.params = params;
   this.options = options || {};
   this.isStatic = true;
-  this.isExtended = id > 0xFF;
+  this.isExtended = id >= 0xFF;
   this.staticSize = this.isExtended ? 5 : 1; // packet id
   this.staticFields = 0;
   for (var i = 0; i < params.length; i++) {
